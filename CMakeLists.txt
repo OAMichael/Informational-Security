@@ -12,9 +12,14 @@ add_compile_options(${COMPILE_OPT})
 set(INCLUDES
     Utils
     3rdparty
+    Ciphers
 )
 
 include_directories(${INCLUDES})
 
-add_subdirectory(BlockCipher)
-add_subdirectory(RSA)
+# Benchmark build
+add_executable(Benchmark Benchmark.cpp) 
+
+include_directories(Testing)
+
+add_subdirectory(Ciphers)

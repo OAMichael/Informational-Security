@@ -29,6 +29,12 @@ inline WorkingMode& operator|=(WorkingMode& lhs, WorkingMode rhs) {
     return lhs;
 }
 
+struct CommandLineArgsInfo {
+    std::string filenameIn;
+    std::string filenameOut;
+    WorkingMode workMode;
+    size_t numWorkers;
+};
 
 struct CommandLineArgsInfo {
     std::string filenameIn;
@@ -80,14 +86,14 @@ static inline void convertBytesToImage(const std::vector<uint8_t> &bytesIn, Imag
 }
 
 
-
-static void shuffleBytes(std::vector<uint8_t> &bytes, bool reverse = false, const uint64_t seed = 228) {
+template <typename Cont_t>
+static void shuffleBytes(Cont_t &bytes, bool reverse = false, const uint64_t seed = 228) {
     static std::mt19937_64 randEngine{0};
     randEngine.seed(seed);
     std::vector<size_t> randIndices;
     randIndices.resize(bytes.size());
 
-    std::vector<uint8_t> tmpBytes;
+    std::vector<typename Cont_t::value_type> tmpBytes;
     tmpBytes.resize(bytes.size());
     std::memcpy(tmpBytes.data(), bytes.data(), bytes.size());
 
