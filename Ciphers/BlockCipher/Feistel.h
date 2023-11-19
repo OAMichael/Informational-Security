@@ -54,8 +54,6 @@ private:
     Key m_masterKey = { 14, 48, 228, 13, 37, 42, 69, 223 };
     Key m_subkeys[NumberOfRound];
 
-    size_t m_numWorkers = 1;
-
     void splitBytesIntoBlocks(const std::vector<uint8_t> &bytesIn, std::vector<Block> &outBlocks) const;
     void mergeBlocksIntoBytes(const std::vector<Block> &inBlocks, std::vector<uint8_t> &bytesOut) const;
 
@@ -67,7 +65,6 @@ private:
 
 public:
     void setMasterKey(const Key &inKey);
-    void setNumWorkers(const size_t numWorkers);
     void encrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut);
     void decrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut);
 
