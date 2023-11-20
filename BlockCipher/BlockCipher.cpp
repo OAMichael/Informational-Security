@@ -2,6 +2,7 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <chrono>
 
 #include "Feistel.h"
 
@@ -64,7 +65,11 @@ int main(int argc, char *argv[]) {
         convertImageToBytes(imageIn, bytesIn);
     }
 
+
+
     BlockCipher::FeistelCipherEncryptor cipherer;
+
+    auto start = std::chrono::high_resolution_clock::now();
     if (workMode & WorkingMode::ENCRYPT) {
         std::cout << "Encrypting..." << std::endl;
         cipherer.encrypt(bytesIn, bytesOut);
@@ -73,7 +78,11 @@ int main(int argc, char *argv[]) {
         std::cout << "Decrypting..." << std::endl;
         cipherer.decrypt(bytesIn, bytesOut);
     }
-    std::cout << "Done!" << std::endl;
+    auto end = std::chrono::high_resolution_clock::now();
+
+    const uint64_t microseconds = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+    std::cout << "Done! Elapsed time: " << microseconds / 1000000.0 << " seconds" << std::endl;
+
 
     if (workMode & WorkingMode::INPUT_TEXT) {
         std::ofstream fileOut;
