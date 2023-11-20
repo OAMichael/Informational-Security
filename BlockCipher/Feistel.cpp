@@ -1,26 +1,26 @@
 #include <cstring>
 
 #include "Feistel.h"
-
+#include "Utils.h"
 
 namespace BlockCipher {
 
 
-void FeistelCipherEncryptor::splitIntoBlocks(const std::string &text, std::vector<Block> &outBlocks) const {
-    const size_t inputTextBitSize = text.size() * 8;
+void FeistelCipherEncryptor::splitBytesIntoBlocks(const std::vector<uint8_t> &bytesIn, std::vector<Block> &outBlocks) const {
+    const size_t inputTextBitSize = bytesIn.size() * 8;
     const size_t numOutBlocks = inputTextBitSize / BlockBitSize + (inputTextBitSize % BlockBitSize != 0); 
 
     outBlocks.resize(numOutBlocks);
-    std::memcpy(outBlocks.data(), text.data(), text.size());
+    std::memcpy(outBlocks.data(), bytesIn.data(), bytesIn.size());
 }
 
 
-void FeistelCipherEncryptor::mergeBlocks(const std::vector<Block> &inBlocks, std::string &text) const {
+void FeistelCipherEncryptor::mergeBlocksIntoBytes(const std::vector<Block> &inBlocks, std::vector<uint8_t> &bytesOut) const {
     // Perform copying
     const size_t totalSize = inBlocks.size() * sizeof(Block);
-    text.resize(totalSize);
+    bytesOut.resize(totalSize);
     for (int i = 0; i < totalSize; ++i) {
-        text[i] = inBlocks[i / BlockByteSize][i % BlockByteSize];
+        bytesOut[i] = inBlocks[i / BlockByteSize][i % BlockByteSize];
     }
 }
 
@@ -58,13 +58,13 @@ void FeistelCipherEncryptor::makeRound(std::vector<Block> &blocks, const int rou
 }
 
 
-void FeistelCipherEncryptor::functionF(const HalfBlock& inHBlock, const Key& subkey, HalfBlock& outHBlock) const {
+void FeistelCipherEncryptor::functionF(const HalfBlock &inHBlock, const Key &subkey, HalfBlock &outHBlock) const {
     for (int i = 0; i < BlockByteSize / 2; ++i) {
         const uint8_t currHBByte = inHBlock[i];
         const uint8_t currKeyByte = subkey[i % KeyByteSize];
 
         // Some weird stuff is going on here
-        outHBlock[i] = (currHBByte ^ currKeyByte & currHBByte ^ 0xD5) & (currKeyByte >> 3);
+        outHBlock[i] = (currHBByte ^ currKeyByte & currHBByte ^ 0xD5) & (currKeyByte >> 3) ^ currHBByte | currKeyByte;
     }
 }
 
@@ -84,34 +84,36 @@ void FeistelCipherEncryptor::setMasterKey(const Key& inKey) {
 }
 
 
-void FeistelCipherEncryptor::encrypt(const std::string &plaintext, std::string &ciphertext) {
+void FeistelCipherEncryptor::encrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
     
-    generateKeys();
-
     std::vector<Block> blocks;
-    splitIntoBlocks(plaintext, blocks);
+    splitBytesIntoBlocks(bytesIn, blocks);
 
-    for (int i = 0; i < NumberOfRound; ++i)
+    for (int i = 0; i < NumberOfRound; ++i) {
         makeRound(blocks, i);
+    }
 
     swapHalfBlockes(blocks);
+    mergeBlocksIntoBytes(blocks, bytesOut);
 
-    mergeBlocks(blocks, ciphertext);
+    Utils::shuffleBytes(bytesOut, false);
 }
 
 
-void FeistelCipherEncryptor::decrypt(const std::string &ciphertext, std::string &plaintext) {
+void FeistelCipherEncryptor::decrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
+
+    Utils::shuffleBytes(bytesIn, true);
 
     std::vector<Block> blocks;
-    splitIntoBlocks(ciphertext, blocks);
+    splitBytesIntoBlocks(bytesIn, blocks);
 
     // A little inorder. But it allows to use same function for decryption
-    for (int i = NumberOfRound - 1; i >= 0; --i)
+    for (int i = NumberOfRound - 1; i >= 0; --i) {
         makeRound(blocks, i);
+    }
 
     swapHalfBlockes(blocks);
-
-    mergeBlocks(blocks, plaintext);
+    mergeBlocksIntoBytes(blocks, bytesOut);
 }
 
 }   // BlockCipher
