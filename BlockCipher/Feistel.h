@@ -1,5 +1,5 @@
-#ifndef FIESTEL_H
-#define FIESTEL_H
+#ifndef FEISTEL_H
+#define FEISTEL_H
 
 #include <cstdint>
 #include <vector>
@@ -51,23 +51,29 @@ struct Key {
 
 class FeistelCipherEncryptor {
 private:
-    Key m_masterKey;
+    Key m_masterKey = { 14, 48, 228, 13, 37, 42, 69, 223 };
     Key m_subkeys[NumberOfRound];
 
-    void splitIntoBlocks(const std::string &text, std::vector<Block> &outBlocks) const;
-    void mergeBlocks(const std::vector<Block> &inBlocks, std::string &text) const;
+    void splitBytesIntoBlocks(const std::vector<uint8_t> &bytesIn, std::vector<Block> &outBlocks) const;
+    void mergeBlocksIntoBytes(const std::vector<Block> &inBlocks, std::vector<uint8_t> &bytesOut) const;
+
     void generateKeys();
+
     void makeRound(std::vector<Block> &blocks, const int roundIdx) const;
-    void functionF(const HalfBlock& inHBlock, const Key& subkey, HalfBlock& outHBlock) const;
+    void functionF(const HalfBlock &inHBlock, const Key &subkey, HalfBlock &outHBlock) const;
     void swapHalfBlockes(std::vector<Block> &blocks) const;
 
 public:
-    void setMasterKey(const Key& inKey);
-    void encrypt(const std::string &plaintext, std::string &ciphertext);
-    void decrypt(const std::string &ciphertext, std::string &plaintext);
+    void setMasterKey(const Key &inKey);
+    void encrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut);
+    void decrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut);
+
+    FeistelCipherEncryptor() {
+        generateKeys();
+    };
 };
 
 }   // BlockCipher
 
 
-#endif  // FIESTEL_H
+#endif  // FEISTEL_H
