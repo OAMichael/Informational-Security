@@ -30,6 +30,14 @@ inline WorkingMode& operator|=(WorkingMode& lhs, WorkingMode rhs) {
 }
 
 
+struct CommandLineArgsInfo {
+    std::string filenameIn;
+    std::string filenameOut;
+    WorkingMode workMode;
+    size_t numWorkers;
+};
+
+
 struct Image {
     int width;
     int height;
@@ -99,15 +107,16 @@ static void shuffleBytes(std::vector<uint8_t> &bytes, bool reverse = false, cons
 }
 
 
-static inline bool parseCommandLineArgs(const int argc, char *argv[], std::string &filenameIn, std::string &filenameOut, WorkingMode &workMode) {
+static inline bool parseCommandLineArgs(const int argc, char *argv[], CommandLineArgsInfo &cmdArgs) {
     if (argc < 2) {
         std::cout << "Usage: " << argv[0] << " <filenameIn> [-o <filenameOut> ...]" << std::endl;
         return false;
     }
 
-    filenameIn = argv[1];
-    filenameOut = "a.out";
-    workMode = static_cast<WorkingMode>(0);
+    cmdArgs.filenameIn = argv[1];
+    cmdArgs.filenameOut = "a.out";
+    cmdArgs.workMode = static_cast<WorkingMode>(0);
+    cmdArgs.numWorkers = 1;
 
     WorkingMode encryptType = static_cast<WorkingMode>(0);
     WorkingMode inputType = static_cast<WorkingMode>(0);
@@ -116,7 +125,7 @@ static inline bool parseCommandLineArgs(const int argc, char *argv[], std::strin
         std::string arg = argv[i];
         if (arg == "-o") {
             if (i + 1 < argc) {
-                filenameOut = argv[i + 1];
+                cmdArgs.filenameOut = argv[i + 1];
                 ++i;
             }
             continue;
@@ -153,20 +162,30 @@ static inline bool parseCommandLineArgs(const int argc, char *argv[], std::strin
             inputType |= WorkingMode::INPUT_IMAGE;
             continue;
         }
+        if (arg == "-w" || arg == "--workers") {
+            if (i + 1 < argc) {
+                size_t numWorkers = std::atoi(argv[i + 1]);
+                if (numWorkers > 1) {
+                    cmdArgs.numWorkers = numWorkers;
+                }
+                ++i;
+            }
+            continue;
+        }
     }
 
     if (encryptType > 0) {
-        workMode |= encryptType;
+        cmdArgs.workMode |= encryptType;
     }
     else {
-        workMode |= WorkingMode::ENCRYPT;
+        cmdArgs.workMode |= WorkingMode::ENCRYPT;
     }
 
     if (inputType > 0) {
-        workMode |= inputType;
+        cmdArgs.workMode |= inputType;
     }
     else {
-        workMode |= WorkingMode::INPUT_TEXT;
+        cmdArgs.workMode |= WorkingMode::INPUT_TEXT;
     }
 
     return true;

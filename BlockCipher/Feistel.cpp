@@ -1,5 +1,7 @@
 #include <cstring>
 
+#include <omp.h>
+
 #include "Feistel.h"
 #include "Utils.h"
 
@@ -19,6 +21,8 @@ void FeistelCipherEncryptor::mergeBlocksIntoBytes(const std::vector<Block> &inBl
     // Perform copying
     const size_t totalSize = inBlocks.size() * sizeof(Block);
     bytesOut.resize(totalSize);
+
+    #pragma omp parallel for num_threads(m_numWorkers)
     for (int i = 0; i < totalSize; ++i) {
         bytesOut[i] = inBlocks[i / BlockByteSize][i % BlockByteSize];
     }
@@ -42,18 +46,21 @@ void FeistelCipherEncryptor::generateKeys() {
 
 
 void FeistelCipherEncryptor::makeRound(std::vector<Block> &blocks, const int roundIdx) const {
-    for (auto &block : blocks) {
+    const size_t blocksCount = blocks.size();
+
+    #pragma omp parallel for num_threads(m_numWorkers)
+    for (size_t i = 0; i < blocksCount; ++i) {
         HalfBlock L, R;
-        std::memcpy(&L, &block, sizeof(HalfBlock));
-        std::memcpy(&R, (char *)&block + sizeof(HalfBlock), sizeof(HalfBlock));
+        std::memcpy(&L, &blocks[i], sizeof(HalfBlock));
+        std::memcpy(&R, (char *)&blocks[i] + sizeof(HalfBlock), sizeof(HalfBlock));
 
         HalfBlock tmp;
         functionF(R, m_subkeys[roundIdx], tmp);
 
         HalfBlock newR = L ^ tmp;
 
-        std::memcpy(&block, &R, sizeof(HalfBlock));
-        std::memcpy((char *)&block + sizeof(HalfBlock), &newR, sizeof(HalfBlock));
+        std::memcpy(&blocks[i], &R, sizeof(HalfBlock));
+        std::memcpy((char *)&blocks[i] + sizeof(HalfBlock), &newR, sizeof(HalfBlock));
     }
 }
 
@@ -70,11 +77,14 @@ void FeistelCipherEncryptor::functionF(const HalfBlock &inHBlock, const Key &sub
 
 
 void FeistelCipherEncryptor::swapHalfBlockes(std::vector<Block> &blocks) const {
-    for (auto &block : blocks) {
+    const size_t blocksCount = blocks.size();
+
+    #pragma omp parallel for num_threads(m_numWorkers)
+    for (size_t i = 0; i < blocksCount; ++i) {
         HalfBlock tmp;
-        std::memcpy(&tmp, &block, sizeof(HalfBlock));
-        std::memcpy(&block, (char *)&block + sizeof(HalfBlock), sizeof(HalfBlock));
-        std::memcpy((char *)&block + sizeof(HalfBlock), &tmp, sizeof(HalfBlock));
+        std::memcpy(&tmp, &blocks[i], sizeof(HalfBlock));
+        std::memcpy(&blocks[i], (char *)&blocks[i] + sizeof(HalfBlock), sizeof(HalfBlock));
+        std::memcpy((char *)&blocks[i] + sizeof(HalfBlock), &tmp, sizeof(HalfBlock));
     }
 }
 
@@ -84,8 +94,12 @@ void FeistelCipherEncryptor::setMasterKey(const Key& inKey) {
 }
 
 
+void FeistelCipherEncryptor::setNumWorkers(const size_t numWorkers) {
+    m_numWorkers = numWorkers;
+}
+
+
 void FeistelCipherEncryptor::encrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
-    
     std::vector<Block> blocks;
     splitBytesIntoBlocks(bytesIn, blocks);
 
