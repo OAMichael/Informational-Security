@@ -7,19 +7,19 @@
 #include <random>
 #include <map>
 
-struct Generator {
-  struct Config {
-    double DeviationsPercent = 0.1;
-    double DeviationSize = 3.0;
-    double DeviationDeviation = 0.1;
-    size_t AlphabetSize = 128;
-    size_t Seed = 1;
-    size_t FirstSymbol = 30;
-  };
+struct GenConfig {
+  double DeviationsPercent = 0.1;
+  double DeviationSize = 3.0;
+  double DeviationDeviation = 0.1;
+  size_t AlphabetSize = 128;
+  size_t Seed = 1;
+  size_t FirstSymbol = 30;
+};
 
+struct Generator {
   using Histogram = std::map<char, size_t>;
 
-  static std::string generate(size_t Size, Config Cfg = Config{}) {
+  static std::string generate(size_t Size, GenConfig Cfg = GenConfig{}) {
     assert(Cfg.AlphabetSize <= 256);
     assert(Cfg.DeviationSize >= 0);
     assert(Cfg.DeviationsPercent >= 0 && Cfg.DeviationsPercent <= 1);

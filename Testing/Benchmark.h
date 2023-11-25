@@ -9,19 +9,21 @@
 #include <chrono>
 #include <algorithm>
 #include <iostream>
+#include <cassert>
+#include <memory>
+#include <iomanip>
 
-struct Benchmark {
-  struct Config {
-    size_t TextSize = 1024;
-    size_t IterNum = 2;
-    bool Validate = true;
+struct BenchConfig {
+  size_t TextSize = 10000000;
+  size_t IterNum = 2;
+  bool Validate = true;
 
-    using Time = std::chrono::milliseconds;
-  };
+  using Time = std::chrono::milliseconds;
+};
 
-private:  
-  std::vector<Executor> Ciphers;
-  Config Cfg;
+class Benchmark {
+  std::vector<Executor *> Ciphers;
+  BenchConfig Cfg;
 
   void reportFatalError(std::string Msg) {
     std::cerr << Msg << std::endl;
@@ -35,7 +37,7 @@ private:
       auto Start = std::chrono::steady_clock::now();
       Func();
       auto End = std::chrono::steady_clock::now();
-      Sum += std::chrono::duration_cast<Config::Time>(End - Start).count();
+      Sum += std::chrono::duration_cast<BenchConfig::Time>(End - Start).count();
     }
     return Sum / Cfg.IterNum;
   }
@@ -47,30 +49,43 @@ public:
   using Result = std::map<std::string, CipherResult>;
 
   template <typename It>
-  Benchmark(It Beg, It End, Config Cfg = Config{}) : Ciphers{Beg, End}, 
+  Benchmark(It Beg, It End, BenchConfig Cfg = BenchConfig{}) : Ciphers{Beg, End}, 
                                                      Cfg{Cfg} {}
 
   Result run() {
     auto Res = Result{};
     auto M = Generator::generate(Cfg.TextSize);
     for (auto &Exec : Ciphers) {
-      auto C = Exec.encrypt(M);
+      assert(Exec);
+      auto C = Exec->encrypt(M);
       auto EncryptTime = measureTime([&Exec, &M]() {
-                                       Exec.encrypt(M);
+                                       Exec->encrypt(M);
                                      });
       auto DecryptTime = measureTime([&Exec, &C]() {
-                                        Exec.decrypt(C);
+                                        Exec->decrypt(C);
                                      });
-      Res[Exec.getName()] = CipherResult{EncryptTime, DecryptTime};
+      Res[Exec->getName()] = CipherResult{EncryptTime, DecryptTime};
 
       if (Cfg.Validate) {
-        auto DecrM = Exec.decrypt(C);
+        auto DecrM = Exec->decrypt(C);
         if (M.size() != DecrM.size() ||
             !std::equal(M.begin(), M.end(), DecrM.begin()))
-          reportFatalError("Wrong cipher: " + Exec.getName());
+          reportFatalError("Wrong cipher: " + Exec->getName());
       }
     }
 
     return Res;  
+  }
+
+  static void printResults(const Result &Res, std::ostream &S) {
+    S << std::setw(15) << "Name" 
+      << std::setw(15) << "Exncryption ms" 
+      << std::setw(15) << "Decryption ms" 
+      << "\n" << std::endl;
+    for (auto &[Name, Time] : Res)
+      S << std::setw(15) << Name 
+        << std::setw(15) << Time.first 
+        << std::setw(15) << Time.second 
+        << std::endl;
   }
 };

@@ -4,3 +4,4 @@ set(SOURCES
 )
 
 add_executable(BlockCipher ${SOURCES})
+target_sources(Benchmark PRIVATE Feistel.cpp)
