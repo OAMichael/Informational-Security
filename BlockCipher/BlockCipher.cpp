@@ -15,26 +15,23 @@ using namespace Utils;
 
 int main(int argc, char *argv[]) {
 
-    std::string filenameIn;
-    std::string filenameOut;
-    WorkingMode workMode;
-
-    if (!parseCommandLineArgs(argc, argv, filenameIn, filenameOut, workMode)) {
+    CommandLineArgsInfo cmdArgs;
+    if (!parseCommandLineArgs(argc, argv, cmdArgs)) {
         return -1;
     }
 
     std::cout << "Using config: ";
-    if (workMode & WorkingMode::ENCRYPT) {
+    if (cmdArgs.workMode & WorkingMode::ENCRYPT) {
         std::cout << "encrypting ";
     }
-    else if (workMode & WorkingMode::DECRYPT) {
+    else if (cmdArgs.workMode & WorkingMode::DECRYPT) {
         std::cout << "decrypting ";
     }
 
-    if (workMode & WorkingMode::INPUT_TEXT) {
+    if (cmdArgs.workMode & WorkingMode::INPUT_TEXT) {
         std::cout << "text";
     }
-    else if (workMode & WorkingMode::INPUT_IMAGE) {
+    else if (cmdArgs.workMode & WorkingMode::INPUT_IMAGE) {
         std::cout << "image";
     }
     std::cout << std::endl;
@@ -44,11 +41,11 @@ int main(int argc, char *argv[]) {
     Image imageIn;
     Image imageOut;
 
-    if (workMode & WorkingMode::INPUT_TEXT) {
+    if (cmdArgs.workMode & WorkingMode::INPUT_TEXT) {
         std::ifstream fileIn;
-        fileIn.open(filenameIn);
+        fileIn.open(cmdArgs.filenameIn);
         if (!fileIn.is_open()) {
-            std::cerr << "Could not open file: " << filenameIn << std::endl;
+            std::cerr << "Could not open file: " << cmdArgs.filenameIn << std::endl;
             return -1;
         }
         std::stringstream bufferIn;
@@ -57,9 +54,9 @@ int main(int argc, char *argv[]) {
 
         convertStringToBytes(bufferIn.str(), bytesIn);
     }
-    else if (workMode & WorkingMode::INPUT_IMAGE) {
-        if (!loadImage(filenameIn, imageIn)) {
-            std::cerr << "Could not load image: " << filenameIn << std::endl;
+    else if (cmdArgs.workMode & WorkingMode::INPUT_IMAGE) {
+        if (!loadImage(cmdArgs.filenameIn, imageIn)) {
+            std::cerr << "Could not load image: " << cmdArgs.filenameIn << std::endl;
             return -1;
         }
         convertImageToBytes(imageIn, bytesIn);
@@ -68,13 +65,14 @@ int main(int argc, char *argv[]) {
 
 
     BlockCipher::FeistelCipherEncryptor cipherer;
+    cipherer.setNumWorkers(cmdArgs.numWorkers);
 
     auto start = std::chrono::high_resolution_clock::now();
-    if (workMode & WorkingMode::ENCRYPT) {
+    if (cmdArgs.workMode & WorkingMode::ENCRYPT) {
         std::cout << "Encrypting..." << std::endl;
         cipherer.encrypt(bytesIn, bytesOut);
     }
-    else if (workMode & WorkingMode::DECRYPT) {
+    else if (cmdArgs.workMode & WorkingMode::DECRYPT) {
         std::cout << "Decrypting..." << std::endl;
         cipherer.decrypt(bytesIn, bytesOut);
     }
@@ -84,21 +82,21 @@ int main(int argc, char *argv[]) {
     std::cout << "Done! Elapsed time: " << microseconds / 1000000.0 << " seconds" << std::endl;
 
 
-    if (workMode & WorkingMode::INPUT_TEXT) {
+    if (cmdArgs.workMode & WorkingMode::INPUT_TEXT) {
         std::ofstream fileOut;
-        fileOut.open(filenameOut);
+        fileOut.open(cmdArgs.filenameOut);
         if (!fileOut.is_open()) {
-            std::cerr << "Could not open file: " << filenameOut << std::endl;
+            std::cerr << "Could not open file: " << cmdArgs.filenameOut << std::endl;
             return -1;
         }
         fileOut.write((const char *)bytesOut.data(), bytesOut.size());
         fileOut.close();
     }
-    else if (workMode & WorkingMode::INPUT_IMAGE) {
+    else if (cmdArgs.workMode & WorkingMode::INPUT_IMAGE) {
         imageOut.width = imageIn.width;
         imageOut.height = imageIn.height;
         convertBytesToImage(bytesOut, imageOut);
-        saveImage(filenameOut, imageOut);
+        saveImage(cmdArgs.filenameOut, imageOut);
         stbi_image_free(imageIn.data);
         stbi_image_free(imageOut.data);
     }
