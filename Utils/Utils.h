@@ -73,8 +73,8 @@ static inline void convertBytesToImage(const std::vector<uint8_t> &bytesIn, Imag
 
 
 
-static void shuffleBytes(std::vector<uint8_t> &bytes, bool reverse = false, const size_t seed = 228) {
-    static std::mt19937 randEngine{0};
+static void shuffleBytes(std::vector<uint8_t> &bytes, bool reverse = false, const uint64_t seed = 228) {
+    static std::mt19937_64 randEngine{0};
     randEngine.seed(seed);
     std::vector<size_t> randIndices;
     randIndices.resize(bytes.size());

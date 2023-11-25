@@ -1,143 +1,169 @@
-#include <iostream>
-#include <cmath>
-#include <algorithm>
-#include <random>
+#include <cstring>
 
-static std::random_device dev;
-static std::mt19937_64 rng(dev());
+#include "RSA.h"
 
-// Check if number is prime
-bool isPrime(const uint64_t n) {
-    const uint64_t upperBound = std::ceil(std::sqrt(n));
-    for (uint64_t i = 2; i <= upperBound; ++i){
-        if (n % i == 0) {
-            return false;
+namespace RSACipher {
+
+
+void RSAEncryptor::generateBigRandomNumber(mpz_t numOut, const mpz_t max = nullptr) {
+    std::uniform_int_distribution<uint64_t> dist(1ULL << 48, 1ULL << 63);
+    constexpr size_t iterationCount = 48;
+
+    mpz_set_ui(numOut, 1);
+    if (max) {
+        mpz_t tmp;
+        mpz_init_set_ui(tmp, 1);
+        // After this loop: 2^2304 <= numOut <= max
+        for (size_t i = 0; i < iterationCount; ++i) {
+            mpz_mul_ui(tmp, numOut, dist(m_randEngine));
+            if (mpz_cmp(tmp, max) > 0) {
+                break;
+            }
+            mpz_set(numOut, tmp);
+        }
+        mpz_clear(tmp);
+    }
+    else {
+        // After this loop: 2^2304 <= numOut <= 2^3024
+        for (size_t i = 0; i < iterationCount; ++i) {
+            mpz_mul_ui(numOut, numOut, dist(m_randEngine));
         }
     }
-    return true;
 }
 
-// Generate random prime number
-uint64_t getRandomPrime(const uint64_t min = (1ULL << 10), const uint64_t max = (1ULL << 15)) {
-    static std::uniform_int_distribution<uint64_t> dist(min, max);
 
-    uint64_t num = dist(rng);
+void RSAEncryptor::generateBigRandomPrime(mpz_t primeOut) {
+    mpz_t bigRandomNum;
+    mpz_init(bigRandomNum);
 
-    // Increase num until it is a prime number
-    while (!isPrime(num)) {
-        ++num;
+    generateBigRandomNumber(bigRandomNum);
+    mpz_nextprime(primeOut, bigRandomNum);
+    mpz_clear(bigRandomNum);
+}
+
+
+void RSAEncryptor::setSeed(const uint64_t seed) {
+    m_randEngine.seed(seed);
+}
+
+
+void RSAEncryptor::generateEncryptionNumbers() {
+    mpz_inits(m_p, m_q, m_n, m_phi, m_e, m_d, nullptr);
+
+    generateBigRandomPrime(m_p);
+    generateBigRandomPrime(m_q);
+    mpz_mul(m_n, m_p, m_q);
+
+    // phi = (p - 1)(q - 1) = pq - p - q + 1 = n - p - q + 1
+    mpz_sub(m_phi, m_n, m_p);
+    mpz_sub(m_phi, m_phi, m_q);
+    mpz_add_ui(m_phi, m_phi, 1);
+
+    generateBigRandomNumber(m_e, m_phi);
+
+    mpz_t gcd;
+    mpz_init_set_ui(gcd, 0);
+    while (mpz_cmp_ui(gcd, 1) != 0) {
+        mpz_add_ui(m_e, m_e, 1);
+        mpz_gcd(gcd, m_e, m_phi);
     }
-    return num;
-}
+    mpz_clear(gcd);
 
-// Function to find GCD (Greatest Common Divisor) of a and b
-inline uint64_t GCD(const uint64_t a, const uint64_t b) {
-    return std::__gcd(a, b);
+    mpz_invert(m_d, m_e, m_phi);
 }
 
 
-// Function which is looking for a random number e
-// from (2, phi-1) such that GCD(e, phi) = 1
-uint64_t lookingForE(uint64_t phi) {
-    std::uniform_int_distribution<uint64_t> dist(2, phi);
-    
-    uint64_t e = dist(rng);
-    while ((GCD(phi, e) != 1) && (!isPrime(e))){
-        ++e;
+void RSAEncryptor::encrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
+    mpz_t currNum;
+    mpz_init_set_ui(currNum, 0);
+
+    constexpr size_t RSABlockBytesize = 512;
+    const size_t RSABlockCount = bytesIn.size() / RSABlockBytesize;
+    const size_t RSABlockRemainder = bytesIn.size() % RSABlockBytesize;
+
+    // This is never less than needed space but almost always too much
+    // Shrink it later. sizeof(uint64_t) is for size serialization
+    bytesOut.resize(2 * sizeof(uint64_t) + (RSABlockCount + 1) * (mpz_sizeinbase(m_n, 256) + sizeof(uint64_t)));
+
+    size_t outIdx = 0;
+    *reinterpret_cast<uint64_t*>(bytesOut.data() + outIdx) = RSABlockCount;
+    outIdx += sizeof(uint64_t);
+
+    *reinterpret_cast<uint64_t*>(bytesOut.data() + outIdx) = RSABlockRemainder;
+    outIdx += sizeof(uint64_t);
+
+    for (size_t i = 0; i < RSABlockCount; ++i) {
+        mpz_import(currNum, RSABlockBytesize, 1, 1, 1, 0, &bytesIn[i * RSABlockBytesize]);
+        mpz_powm(currNum, currNum, m_e, m_n);
+
+        uint64_t currNumBytesize = mpz_sizeinbase(currNum, 256);
+        *reinterpret_cast<uint64_t*>(bytesOut.data() + outIdx) = currNumBytesize;
+        outIdx += sizeof(uint64_t);
+
+        mpz_export(&bytesOut[outIdx], nullptr, 1, 1, 1, 0, currNum);
+        outIdx += currNumBytesize;
     }
-    return e;
-}
 
+    if (RSABlockRemainder > 0) {
+        mpz_import(currNum, RSABlockRemainder, 1, 1, 1, 0, &bytesIn[RSABlockCount * RSABlockBytesize]);
+        mpz_powm(currNum, currNum, m_e, m_n);
 
-// Function to find inverse element for e in the ring of remainders of phi
-uint64_t inverseE(const uint64_t phi, const uint64_t e) {
-    uint64_t r[3] = {};
-    uint64_t q = 0;
-    uint64_t v[3] = {};
+        uint64_t currNumBytesize = mpz_sizeinbase(currNum, 256);
+        *reinterpret_cast<uint64_t*>(bytesOut.data() + outIdx) = currNumBytesize;
+        outIdx += sizeof(uint64_t);
 
-    r[0] = phi;
-    r[1] = e;
-
-    v[0] = 0;
-    v[1] = 1;
-
-    while (r[2] != 1) {
-        q = r[0] / r[1];
-        r[2] = r[0] % r[1];
-        v[2] = v[0] + (phi * phi - q * v[1]);
-        v[2] = v[0] + (phi - q) * v[1];
-        v[2] %= phi;
-        
-        v[0] = v[1];
-        v[1] = v[2];
-        r[0] = r[1];
-        r[1] = r[2];
+        mpz_export(&bytesOut[outIdx], nullptr, 1, 1, 1, 0, currNum);
+        outIdx += currNumBytesize;
     }
-    return v[2];
+
+    bytesOut.resize(outIdx);
+    bytesOut.shrink_to_fit();
+    mpz_clear(currNum);
 }
 
 
-// Returns a^b (mod m)
-uint64_t modpow(uint64_t a, uint64_t b, const uint64_t m) {
-    a %= m;
-    uint64_t result = 1;
-    while (b > 0) {
-        if (b & 1) {
-            result = (result * a) % m;
-        }
-        a = (a * a) % m;
-        b >>= 1;
+void RSAEncryptor::decrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
+    mpz_t currNum;
+    mpz_init_set_ui(currNum, 0);
+
+    constexpr size_t RSABlockBytesize = 512;
+
+    size_t inIdx = 0;
+    const size_t RSABlockCount = *reinterpret_cast<uint64_t*>(bytesIn.data() + inIdx);
+    inIdx += sizeof(uint64_t);
+
+    const size_t RSABlockRemainder = *reinterpret_cast<uint64_t*>(bytesIn.data() + inIdx);
+    inIdx += sizeof(uint64_t);
+
+    // This is never less than needed space but almost always too much
+    // Shrink it later
+    bytesOut.resize((RSABlockCount + 1) * mpz_sizeinbase(m_n, 256));
+
+    for (size_t i = 0; i < RSABlockCount; ++i) {
+        uint64_t currNumBytesize = *reinterpret_cast<uint64_t*>(bytesIn.data() + inIdx);
+        inIdx += sizeof(uint64_t);
+
+        mpz_import(currNum, currNumBytesize, 1, 1, 1, 0, &bytesIn[inIdx]);
+        mpz_powm(currNum, currNum, m_d, m_n);
+        inIdx += currNumBytesize;
+
+        mpz_export(&bytesOut[i * RSABlockBytesize], nullptr, 1, 1, 1, 0, currNum);
     }
-    return result;
+
+    if (RSABlockRemainder > 0) {
+        uint64_t currNumBytesize = *reinterpret_cast<uint64_t*>(bytesIn.data() + inIdx);
+        inIdx += sizeof(uint64_t);
+
+        mpz_import(currNum, currNumBytesize, 1, 1, 1, 0, &bytesIn[inIdx]);
+        mpz_powm(currNum, currNum, m_d, m_n);
+        inIdx += currNumBytesize;
+
+        mpz_export(&bytesOut[RSABlockCount * RSABlockBytesize], nullptr, 1, 1, 1, 0, currNum);
+    }
+
+    bytesOut.resize(RSABlockCount * RSABlockBytesize + RSABlockRemainder);
+    bytesOut.shrink_to_fit();
+    mpz_clear(currNum);
 }
 
-
-int main() {
-
-    std::cout << "Generated parameters: " << std::endl;
-    // Generate random numbers p and q
-    const uint64_t p = getRandomPrime();
-    const uint64_t q = getRandomPrime();
-
-    std::cout << "p = " << p << std::endl;
-    std::cout << "q = " << q << std::endl;
-
-    // Calculate n
-    const uint64_t n = p * q;
-    std::cout << "n = " << n << std::endl;
-
-    // Calculate phi-function
-    const uint64_t phi = (p - 1) * (q - 1);
-    std::cout << "phi = " << phi << std::endl;
-
-    // Generate random coprime with phi
-    const uint64_t e = lookingForE(phi);
-    std::cout << "e = " << e << std::endl;
-
-    // Find inverse element for e
-    const uint64_t d = inverseE(phi, e);
-    std::cout << "d = " << d << std::endl << std::endl;
-
-
-    std::cout << "Enter message:" << std::endl;
-	uint64_t message = 0;
-	std::cin >> message;
-
-    std::cout << "Plaintext:" << std::endl;
-    std::cout << message << std::endl << std::endl;
-
-    // Encrypt
-	uint64_t cipher = modpow(message, e, n);
-
-    std::cout << "Ciphertext:" << std::endl;
-    std::cout << cipher << std::endl << std::endl;
-
-    // Decrypt
-    uint64_t decrypted = modpow(cipher, d, n);
-
-    std::cout << "Decrypted:" << std::endl;
-    std::cout << decrypted << std::endl;
-
-    return 0;
 }
-
