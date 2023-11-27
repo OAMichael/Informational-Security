@@ -14,7 +14,7 @@
 #include <iomanip>
 
 struct BenchConfig {
-  size_t TextSize = 500000;
+  size_t TextSize = 50000;
   size_t IterNum = 2;
   bool Validate = true;
 
@@ -78,12 +78,12 @@ public:
   }
 
   static void printResults(const Result &Res, std::ostream &S) {
-    S << std::setw(15) << "Name" 
+    S << std::setw(20) << "Name" 
       << std::setw(15) << "Exncryption ms" 
       << std::setw(15) << "Decryption ms" 
       << "\n" << std::endl;
     for (auto &[Name, Time] : Res)
-      S << std::setw(15) << Name 
+      S << std::setw(20) << Name 
         << std::setw(15) << Time.first 
         << std::setw(15) << Time.second 
         << std::endl;

@@ -36,14 +36,6 @@ struct CommandLineArgsInfo {
     size_t numWorkers;
 };
 
-struct CommandLineArgsInfo {
-    std::string filenameIn;
-    std::string filenameOut;
-    WorkingMode workMode;
-    size_t numWorkers;
-};
-
-
 struct Image {
     int width;
     int height;
