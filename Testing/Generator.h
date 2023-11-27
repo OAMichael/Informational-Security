@@ -8,12 +8,12 @@
 #include <map>
 
 struct GenConfig {
-  double DeviationsPercent = 0.1;
-  double DeviationSize = 3.0;
+  double DeviationsPart = 0.05;
+  double DeviationSize = 5.0;
   double DeviationDeviation = 0.1;
-  size_t AlphabetSize = 128;
+  size_t AlphabetSize = 256;
   size_t Seed = 1;
-  size_t FirstSymbol = 30;
+  size_t FirstSymbol = 0;
 };
 
 struct Generator {
@@ -22,12 +22,12 @@ struct Generator {
   static std::string generate(size_t Size, GenConfig Cfg = GenConfig{}) {
     assert(Cfg.AlphabetSize <= 256);
     assert(Cfg.DeviationSize >= 0);
-    assert(Cfg.DeviationsPercent >= 0 && Cfg.DeviationsPercent <= 1);
+    assert(Cfg.DeviationsPart >= 0 && Cfg.DeviationsPart <= 1);
     auto Gen = std::mt19937{Cfg.Seed};
     auto Weights = std::vector<double>(Cfg.AlphabetSize);
     std::fill(Weights.begin(), Weights.end(), 1.0);
 
-    for (size_t i = 0; i < Cfg.DeviationsPercent * Cfg.DeviationSize; ++i) {
+    for (size_t i = 0; i < Cfg.DeviationsPart * Cfg.AlphabetSize; ++i) {
       auto DeviationDistr = 
         std::normal_distribution{Cfg.DeviationSize, 
                                  Cfg.DeviationSize * Cfg.DeviationDeviation};
@@ -48,7 +48,7 @@ struct Generator {
     return Res;
   }
 
-  static Histogram getHistogram(std::string M) {
+  static Histogram getHistogram(const std::string &M) {
     auto Res = Histogram{};
     for (auto C : M)
       ++Res[C];

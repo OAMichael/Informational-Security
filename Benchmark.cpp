@@ -3,6 +3,15 @@
 #include "BlockCipher/FeistelExecutor.h"
 #include "RSA/RSAExecutor.h"
 
+#include <fstream>
+#include <iostream>
+
+void printHist(const Generator::Histogram &Hist, std::ostream &S) {
+  for (auto [C, Count] : Hist)
+    S << static_cast<int>(C) << " " 
+      << static_cast<double>(Count) << std::endl;
+}
+
 int main() {
   auto Mock = std::make_unique<mock::Cipher>(); 
   auto Feistel = std::make_unique<feistel::Cipher>();
@@ -13,15 +22,25 @@ int main() {
                                          RSA.get()};
 
   auto Cfg = BenchConfig{};
-  Cfg.TextSize = 5000;
+  Cfg.TextSize = 512;
   auto Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "Text size: " << Cfg.TextSize << std::endl;
   Benchmark::printResults(Res, std::cout);
 
-  Cfg.TextSize = 10000000;
+  Cfg.TextSize = 512;
   Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar4.get(), 
                                     FeistelPar10.get()};
   Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "\nParallel version on text: " << Cfg.TextSize << std::endl; 
   Benchmark::printResults(Res, std::cout);
+
+  auto GeneratorCfg = GenConfig{};
+  auto PlainText = Generator::generate(500000, GeneratorCfg);
+  auto Hist = Generator::getHistogram(PlainText);
+
+  auto InputHistFile = std::ofstream{"input-hist"};
+  auto OutputHistFile = std::ofstream{"output-hist"}; 
+  printHist(Hist, InputHistFile);
+  Hist = Generator::getHistogram(Feistel->encrypt(PlainText)); 
+  printHist(Hist, OutputHistFile);
 }
