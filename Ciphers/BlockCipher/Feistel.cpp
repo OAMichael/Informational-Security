@@ -1,33 +1,11 @@
 #include <cstring>
 
-#include <omp.h>
-
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "Feistel.h"
 #include "Utils.h"
 
 namespace BlockCipher {
-
-
-void FeistelCipherEncryptor::splitBytesIntoBlocks(const std::vector<uint8_t> &bytesIn, std::vector<Block> &outBlocks) const {
-    const size_t inputTextBitSize = bytesIn.size() * 8;
-    const size_t numOutBlocks = inputTextBitSize / BlockBitSize + (inputTextBitSize % BlockBitSize != 0); 
-
-    outBlocks.resize(numOutBlocks);
-    std::memcpy(outBlocks.data(), bytesIn.data(), bytesIn.size());
-}
-
-
-void FeistelCipherEncryptor::mergeBlocksIntoBytes(const std::vector<Block> &inBlocks, std::vector<uint8_t> &bytesOut) const {
-    // Perform copying
-    const size_t totalSize = inBlocks.size() * sizeof(Block);
-    bytesOut.resize(totalSize);
-
-    #pragma omp parallel for num_threads(m_numWorkers)
-    for (int i = 0; i < totalSize; ++i) {
-        bytesOut[i] = inBlocks[i / BlockByteSize][i % BlockByteSize];
-    }
-}
-
 
 void FeistelCipherEncryptor::generateKeys() {
     // Simple cyclic shift to the left
@@ -93,41 +71,8 @@ void FeistelCipherEncryptor::setMasterKey(const Key& inKey) {
     m_masterKey = inKey;
 }
 
-
 void FeistelCipherEncryptor::setNumWorkers(const size_t numWorkers) {
     m_numWorkers = numWorkers;
-}
-
-
-void FeistelCipherEncryptor::encrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
-    std::vector<Block> blocks;
-    splitBytesIntoBlocks(bytesIn, blocks);
-
-    for (int i = 0; i < NumberOfRound; ++i) {
-        makeRound(blocks, i);
-    }
-
-    swapHalfBlockes(blocks);
-    mergeBlocksIntoBytes(blocks, bytesOut);
-
-    Utils::shuffleBytes(bytesOut, false);
-}
-
-
-void FeistelCipherEncryptor::decrypt(std::vector<uint8_t> &bytesIn, std::vector<uint8_t> &bytesOut) {
-
-    Utils::shuffleBytes(bytesIn, true);
-
-    std::vector<Block> blocks;
-    splitBytesIntoBlocks(bytesIn, blocks);
-
-    // A little inorder. But it allows to use same function for decryption
-    for (int i = NumberOfRound - 1; i >= 0; --i) {
-        makeRound(blocks, i);
-    }
-
-    swapHalfBlockes(blocks);
-    mergeBlocksIntoBytes(blocks, bytesOut);
 }
 
 }   // BlockCipher
