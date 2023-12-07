@@ -2,6 +2,7 @@
 #include "Mock/MockExecutor.h"
 #include "BlockCipher/FeistelExecutor.h"
 #include "RSA/RSAExecutor.h"
+#include "BlockCipherParallel/FeistelPrallelExecutor.h"
 
 #include <fstream>
 #include <iostream>
@@ -18,6 +19,7 @@ int main() {
   auto FeistelPar4 = std::make_unique<feistelParallel::Cipher<4>>();
   auto FeistelPar10 = std::make_unique<feistelParallel::Cipher<10>>();
   auto RSA = std::make_unique<RSA::Cipher>();
+  auto FeistelCuda = std::make_unique<feistelCuda::Cipher>();
   auto Ciphers = std::vector<Executor *>{Mock.get(), Feistel.get(), 
                                          RSA.get()};
 
@@ -29,7 +31,7 @@ int main() {
 
   Cfg.TextSize = 512;
   Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar4.get(), 
-                                    FeistelPar10.get()};
+                                    FeistelPar10.get(), FeistelCuda.get()};
   Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "\nParallel version on text: " << Cfg.TextSize << std::endl; 
   Benchmark::printResults(Res, std::cout);
