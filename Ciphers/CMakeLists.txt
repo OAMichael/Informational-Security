@@ -1,3 +1,4 @@
 add_subdirectory(BlockCipher)
 add_subdirectory(RSA)
 add_subdirectory(Mock)
+add_subdirectory(Elephant)
