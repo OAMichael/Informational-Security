@@ -233,7 +233,7 @@ void encrypt(std::string &CipherText,
             const unsigned char *nonce,
             const unsigned char *k) {
   CipherText.resize(PlainText.size() + TAG_SIZE);
-  BYTE tag[1];
+  BYTE tag[TAG_SIZE];
   implementation_of_crypto(CipherText, tag, PlainText, aData, nonce, k, true);
   memcpy(CipherText.data() + PlainText.size(), tag, TAG_SIZE);
 }
@@ -244,9 +244,10 @@ void decrypt(std::string &PlainText,
              const unsigned char *nonce,
              const unsigned char *k) {
   assert(CipherText.size() >= TAG_SIZE);
-  PlainText.resize(CipherText.size() - TAG_SIZE);
-  BYTE tag[1];
+  PlainText.resize(CipherText.size());
+  BYTE tag[TAG_SIZE];
   implementation_of_crypto(PlainText, tag, CipherText, aData, nonce, k, false);
+  PlainText.resize(CipherText.size() - TAG_SIZE);
 }
 
 std::string ElephantEncryptor::encrypt(const std::string &PlainText) {
