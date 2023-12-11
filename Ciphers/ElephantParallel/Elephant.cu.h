@@ -10,7 +10,20 @@
 #define MAX_NUMBER_OF_KESSAK_ROUNDS 18
 #define INDEX(a, b) (((a) % 5) + 5 * ((b) % 5)) 
 
-class ElephantEncryptor {
+void encrypt(std::string &CipherText,
+            const std::string &PlainText,
+            const std::string &aData,
+            const unsigned char *nonce,
+            const unsigned char *k);
+
+void decrypt(std::string &PlainText,
+             const std::string &CipherText,
+             const std::string &aData,
+             const unsigned char *nonce,
+             const unsigned char *k);
+
+template <int BlockSize, int NumOfThreads>
+class ElephantCudadEncryptor {
   unsigned long long lenMessage;
   unsigned long long len;
   unsigned char plaintext[ELEPHANT_NUMBER_OF_BYTES];
@@ -27,10 +40,18 @@ class ElephantEncryptor {
   char additional[TAG_SIZE] = "kek";
 
 public:
-  ElephantEncryptor() {
+  ElephantCudadEncryptor() {
     aData.reserve(1);
   }
 
-  std::string encrypt(const std::string &PlainText);
-  std::string decrypt(const std::string &CipherText);
+  std::string encrypt(const std::string &PlainText) {
+    auto CipherText = std::string{};
+    ::encrypt(CipherText, PlainText, aData, nonce, key);
+    return CipherText;
+  }
+  std::string decrypt(const std::string &CipherText) {
+    auto PlainText = std::string{};
+    ::decrypt(PlainText, CipherText, aData, nonce, key);
+    return PlainText;
+  }
 };

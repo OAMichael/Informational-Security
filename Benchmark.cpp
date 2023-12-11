@@ -3,6 +3,7 @@
 #include "BlockCipher/FeistelExecutor.h"
 #include "RSA/RSAExecutor.h"
 #include "Elephant/ElephantExecutor.h"
+#include "ElephantParallel/ElephantCudaExecutor.h"
 
 #include <fstream>
 #include <iostream>
@@ -20,14 +21,18 @@ int main(int Argc, char **Argv) {
   auto FeistelPar10 = std::make_unique<feistelParallel::Cipher<10>>();
   auto RSA = std::make_unique<RSA::Cipher>();
   auto Elephant = std::make_unique<elephant::Cipher>();
+  auto ElephantCuda = std::make_unique<elephantCuda::Cipher<1, 1>>();
   auto Ciphers = std::vector<Executor *>{Mock.get(), Feistel.get(), 
-                                         Elephant.get(), RSA.get()};
+                                         Elephant.get(), RSA.get(),
+                                         ElephantCuda.get()};
 
   auto Cfg = BenchConfig{};
-  Cfg.TextSize = 51200;
+  Cfg.TextSize = 5120;
   auto Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "Text size: " << Cfg.TextSize << std::endl;
   Benchmark::printResults(Res, std::cout);
+
+return 0;
 
   Cfg.TextSize = 51200000;
   Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar4.get(), 
