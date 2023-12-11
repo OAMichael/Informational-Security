@@ -2,6 +2,7 @@
 #include "Mock/MockExecutor.h"
 #include "BlockCipher/FeistelExecutor.h"
 #include "RSA/RSAExecutor.h"
+#include "Elephant/ElephantExecutor.h"
 
 #include <fstream>
 #include <iostream>
@@ -18,15 +19,17 @@ int main() {
   auto FeistelPar4 = std::make_unique<feistelParallel::Cipher<4>>();
   auto FeistelPar10 = std::make_unique<feistelParallel::Cipher<10>>();
   auto RSA = std::make_unique<RSA::Cipher>();
+  auto Elephant = std::make_unique<elephant::Cipher>();
   auto Ciphers = std::vector<Executor *>{Mock.get(), Feistel.get(), 
-                                         RSA.get()};
+                                         Elephant.get()};
 
   auto Cfg = BenchConfig{};
-  Cfg.TextSize = 512;
+  Cfg.TextSize = 51200000;
   auto Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "Text size: " << Cfg.TextSize << std::endl;
   Benchmark::printResults(Res, std::cout);
 
+  return 0;
   Cfg.TextSize = 512;
   Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar4.get(), 
                                     FeistelPar10.get()};
