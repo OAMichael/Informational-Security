@@ -6,21 +6,37 @@
 #include <cstdlib>
 #include <cstring>
 #include <cassert>
+#include <algorithm>
 
 typedef unsigned char BYTE; // 8 bit
 typedef unsigned long long LEN;
-const unsigned int kessak_rho_offsets[25] = {0, 1, 6, 4, 3, 4, 4, 6, 7, 4, 3, 2, 3, 1, 7, 1, 5, 7, 5, 0, 2, 2, 5, 0, 6};
 
 #define CAST_TO_BYTE(val) reinterpret_cast<BYTE *>(val)
 #define CAST_TO_CONST_BYTE(val) reinterpret_cast<const BYTE *>(val)
 
-const BYTE kessak_round_constants[MAX_NUMBER_OF_KESSAK_ROUNDS] = {
-    0x01, 0x82, 0x8a, 0x00, 0x8b, 0x01, 0x81, 0x09, 0x8a,
-    0x88, 0x09, 0x0a, 0x8b, 0x8b, 0x89, 0x03, 0x02, 0x80};
-
 // Macro to perform a cyclic left shift on eight bits
 #define ROTATE_LEFT_8_BIT(a, offset) ((offset != 0) ? ((((BYTE)a) << offset) ^ (((BYTE)a) >> (sizeof(BYTE) * 8 - offset))) : a)
 
+#define CUDA_CHECK(expr)                                                       \
+  {                                                                            \
+    auto MyErr = (expr);                                                       \
+    if (MyErr != cudaSuccess) {                                                \
+      printf("%s in %s at line %d\n", cudaGetErrorString(MyErr), __FILE__,     \
+             __LINE__);                                                        \
+      exit(1);                                                                 \
+    }                                                                          \
+  }
+
+namespace {
+
+template <typename T1, typename T2>
+__device__ __host__ unsigned ceilDiv(T1 Lhs, T2 Rhs) {
+  auto LhsF = static_cast<float>(Lhs);
+  auto RhsF = static_cast<float>(Rhs);
+  return ceil(LhsF / RhsF);
+}
+
+__device__
 void theta(BYTE *TRIAL_ARR) {
   unsigned int a, b;
   BYTE ARR[5], ARR2[5];
@@ -39,12 +55,15 @@ void theta(BYTE *TRIAL_ARR) {
       TRIAL_ARR[INDEX(a, b)] ^= ARR2[a];
 }
 
+__device__
 void rho(BYTE *TRIAL_ARR) {
+  const unsigned int kessak_rho_offsets[25] = {0, 1, 6, 4, 3, 4, 4, 6, 7, 4, 3, 2, 3, 1, 7, 1, 5, 7, 5, 0, 2, 2, 5, 0, 6};
   for (unsigned int a = 0; a < 5; a++)
     for (unsigned int b = 0; b < 5; b++)
       TRIAL_ARR[INDEX(a, b)] = ROTATE_LEFT_8_BIT(TRIAL_ARR[INDEX(a, b)], kessak_rho_offsets[INDEX(a, b)]);
 }
 
+__device__
 void pi(BYTE *TRIAL_ARR) {
   BYTE fix_mask[25];
 
@@ -57,6 +76,7 @@ void pi(BYTE *TRIAL_ARR) {
       TRIAL_ARR[INDEX(0 * a + 1 * b, 2 * a + 3 * b)] = fix_mask[INDEX(a, b)];
 }
 
+__device__
 void hi(BYTE *TRIAL_ARR) {
   unsigned int a, b;
   BYTE ARR[5];
@@ -69,10 +89,16 @@ void hi(BYTE *TRIAL_ARR) {
   }
 }
 
+__device__
 void io(BYTE *TRIAL_ARR, unsigned int ind) {
+  const BYTE kessak_round_constants[MAX_NUMBER_OF_KESSAK_ROUNDS] = {
+    0x01, 0x82, 0x8a, 0x00, 0x8b, 0x01, 0x81, 0x09, 0x8a,
+    0x88, 0x09, 0x0a, 0x8b, 0x8b, 0x89, 0x03, 0x02, 0x80};
+  
   TRIAL_ARR[INDEX(0, 0)] ^= kessak_round_constants[ind];
 }
 
+__device__
 void Kessak200UnionForOneRound(BYTE *tmp_state, unsigned int tmp_round_idx) {
   theta(tmp_state);
   rho(tmp_state);
@@ -81,24 +107,18 @@ void Kessak200UnionForOneRound(BYTE *tmp_state, unsigned int tmp_round_idx) {
   io(tmp_state, tmp_round_idx);
 }
 
+__device__
 void permutation(BYTE *param) {
   for (unsigned int t = 0; t < MAX_NUMBER_OF_KESSAK_ROUNDS; t++)
     Kessak200UnionForOneRound(param, t);
 }
 
+__device__
 BYTE LeftShift(BYTE byte) {
   return (byte << 1) | (byte >> 7);
 }
 
-// Cmp function compares two blocks of data byte by byte and returns 0 if the blocks are identical, and 1 otherwise
-int cmp(const BYTE *a, const BYTE *b, LEN length) {
-  BYTE r = 0;
-  for (LEN i = 0; i < length; ++i)
-    r |= a[i] ^ b[i];
-  return r;
-}
-
-// Implements a single step linear feedback shifter (LFSR). Used to generate a mask for data encryption
+__device__
 void lfsr(BYTE *out, BYTE *in) {
   BYTE cur = LeftShift(in[0]) ^ LeftShift(in[2]) ^ (in[13] << 1);
   for (LEN t = 0; t < BLOCK_SIZE - 1; ++t)
@@ -106,11 +126,13 @@ void lfsr(BYTE *out, BYTE *in) {
   out[BLOCK_SIZE - 1] = cur;
 }
 
+__device__
 void xorOfBlock(BYTE *tmp_state, const BYTE *block, LEN length) {
   for (LEN t = 0; t < length; ++t)
     tmp_state[t] ^= block[t];
 }
 
+__device__
 void get_ciphertext_block(BYTE *out, const BYTE *c, LEN cipher_len, LEN t) {
   const LEN offset = t * BLOCK_SIZE;
 
@@ -131,6 +153,7 @@ void get_ciphertext_block(BYTE *out, const BYTE *c, LEN cipher_len, LEN t) {
   }
 }
 
+__device__
 void get_associated_data_block(BYTE *out, const BYTE *aData, LEN len_aData, 
                                const BYTE *nonce, LEN t) {
   const LEN offset = t * BLOCK_SIZE - (t != 0) * NONCE_NUM_BYTES;
@@ -160,6 +183,7 @@ void get_associated_data_block(BYTE *out, const BYTE *aData, LEN len_aData,
   }
 }
 
+__global__
 void implementation_of_crypto(BYTE *c, BYTE *tag, 
                          const BYTE *m, LEN len_message,
                          const BYTE *aData, LEN len_aData,
@@ -233,31 +257,128 @@ void implementation_of_crypto(BYTE *c, BYTE *tag,
   }
 }
 
-void encrypt(std::string &CipherText,
+} // anonymous namespace
+
+__host__
+void encryptCuda(std::string &CipherText,
             const std::string &PlainText,
             const std::string &aData,
             const unsigned char *nonce,
-            const unsigned char *k) {
-  CipherText.resize(PlainText.size() + TAG_SIZE);
-  BYTE tag[TAG_SIZE];
-  implementation_of_crypto(CAST_TO_BYTE(CipherText.data()), tag, 
-                           CAST_TO_CONST_BYTE(PlainText.data()), PlainText.size(), 
-                           CAST_TO_CONST_BYTE(aData.data()), aData.size(), 
-                           nonce, k, true);
-  memcpy(CipherText.data() + PlainText.size(), tag, TAG_SIZE);
+            const unsigned char *k,
+            unsigned BlockSize,
+            unsigned NumOfThreads) {
+  BYTE *tag_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&tag_cuda, TAG_SIZE));
+
+  BYTE *CipherText_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&CipherText_cuda, PlainText.size() + TAG_SIZE));
+
+  BYTE *PlainText_cuda;  
+  CUDA_CHECK(cudaMalloc((void **)&PlainText_cuda, PlainText.size()));
+  CUDA_CHECK(cudaMemcpy(PlainText_cuda, PlainText.data(), PlainText.size(),
+                        cudaMemcpyHostToDevice));
+
+  BYTE *aData_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&aData_cuda, aData.size()));
+  CUDA_CHECK(cudaMemcpy(aData_cuda, aData.data(), aData.size(),
+                        cudaMemcpyHostToDevice));
+
+  BYTE *nonce_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&nonce_cuda, NONCE_NUM_BYTES));
+  CUDA_CHECK(cudaMemcpy(nonce_cuda, nonce, NONCE_NUM_BYTES,
+                        cudaMemcpyHostToDevice));
+  
+  BYTE *k_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&k_cuda, KEY_NUMBER_OF_BYTES));
+  CUDA_CHECK(cudaMemcpy(k_cuda, k, KEY_NUMBER_OF_BYTES,
+                        cudaMemcpyHostToDevice));
+
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{ceilDiv(NumOfThreads, BlockSize)};
+
+  implementation_of_crypto<<<BlockGridDim, ThrBlockDim>>>(
+                              CipherText_cuda, tag_cuda,
+                              PlainText_cuda, PlainText.size(), 
+                              aData_cuda, aData.size(), 
+                              nonce_cuda, k_cuda, true);
+
+  CipherText.clear();
+  auto Buf = new char[PlainText.size()];
+  CUDA_CHECK(cudaMemcpy(Buf, CipherText_cuda, 
+                        PlainText.size(),
+                        cudaMemcpyDeviceToHost));
+  CipherText.append(Buf, PlainText.size());
+
+  CUDA_CHECK(cudaMemcpy(Buf, tag_cuda, TAG_SIZE,
+                        cudaMemcpyDeviceToHost));
+  CipherText.append(Buf, TAG_SIZE);
+  delete[] Buf;
+
+  CUDA_CHECK(cudaFree(tag_cuda));
+  CUDA_CHECK(cudaFree(CipherText_cuda));
+  CUDA_CHECK(cudaFree(PlainText_cuda));
+  CUDA_CHECK(cudaFree(aData_cuda));
+  CUDA_CHECK(cudaFree(nonce_cuda));
+  CUDA_CHECK(cudaFree(k_cuda));
 }
 
-void decrypt(std::string &PlainText,
+__host__
+void decryptCuda(std::string &PlainText,
              const std::string &CipherText,
              const std::string &aData,
              const unsigned char *nonce,
-             const unsigned char *k) {
+             const unsigned char *k,
+             unsigned BlockSize,
+             unsigned NumOfThreads) {
   assert(CipherText.size() >= TAG_SIZE);
-  PlainText.resize(CipherText.size());
-  BYTE tag[TAG_SIZE];
-  implementation_of_crypto(CAST_TO_BYTE(PlainText.data()), tag, 
-                           CAST_TO_CONST_BYTE(CipherText.data()), CipherText.size(),
-                           CAST_TO_CONST_BYTE(aData.data()), aData.size(), 
-                           nonce, k, false);
-  PlainText.resize(CipherText.size() - TAG_SIZE);
+  
+  BYTE *tag_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&tag_cuda, TAG_SIZE));
+
+  BYTE *PlainText_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&PlainText_cuda, CipherText.size() + TAG_SIZE));
+
+  BYTE *CipherText_cuda;  
+  CUDA_CHECK(cudaMalloc((void **)&CipherText_cuda, CipherText.size()));
+  CUDA_CHECK(cudaMemcpy(CipherText_cuda, CipherText.data(), CipherText.size(),
+                        cudaMemcpyHostToDevice));
+
+  BYTE *aData_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&aData_cuda, aData.size()));
+  CUDA_CHECK(cudaMemcpy(aData_cuda, aData.data(), aData.size(),
+                        cudaMemcpyHostToDevice));
+
+  BYTE *nonce_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&nonce_cuda, NONCE_NUM_BYTES));
+  CUDA_CHECK(cudaMemcpy(nonce_cuda, nonce, NONCE_NUM_BYTES,
+                        cudaMemcpyHostToDevice));
+  
+  BYTE *k_cuda;
+  CUDA_CHECK(cudaMalloc((void **)&k_cuda, KEY_NUMBER_OF_BYTES));
+  CUDA_CHECK(cudaMemcpy(k_cuda, k, KEY_NUMBER_OF_BYTES,
+                        cudaMemcpyHostToDevice));
+
+  dim3 ThrBlockDim{BlockSize};
+  dim3 BlockGridDim{ceilDiv(NumOfThreads, BlockSize)};
+
+  implementation_of_crypto<<<BlockGridDim, ThrBlockDim>>>(
+                              PlainText_cuda, tag_cuda, 
+                              CipherText_cuda, CipherText.size(),
+                              aData_cuda, aData.size(), 
+                              nonce_cuda, k_cuda, false);
+  
+  PlainText.clear();
+  auto Buf = new char[CipherText.size()];
+  CUDA_CHECK(cudaMemcpy(Buf, PlainText_cuda, 
+                        CipherText.size() - TAG_SIZE,
+                        cudaMemcpyDeviceToHost));
+  PlainText.append(Buf, CipherText.size() - TAG_SIZE);
+  delete[] Buf;
+
+  CUDA_CHECK(cudaFree(tag_cuda));
+  CUDA_CHECK(cudaFree(CipherText_cuda));
+  CUDA_CHECK(cudaFree(PlainText_cuda));
+  CUDA_CHECK(cudaFree(aData_cuda));
+  CUDA_CHECK(cudaFree(nonce_cuda));
+  CUDA_CHECK(cudaFree(k_cuda));
 }

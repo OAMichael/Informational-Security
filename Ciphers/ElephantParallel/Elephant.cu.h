@@ -10,17 +10,21 @@
 #define MAX_NUMBER_OF_KESSAK_ROUNDS 18
 #define INDEX(a, b) (((a) % 5) + 5 * ((b) % 5)) 
 
-void encrypt(std::string &CipherText,
-            const std::string &PlainText,
-            const std::string &aData,
-            const unsigned char *nonce,
-            const unsigned char *k);
+void encryptCuda(std::string &CipherText,
+                const std::string &PlainText,
+                const std::string &aData,
+                const unsigned char *nonce,
+                const unsigned char *k,
+                unsigned BlockSize,
+                unsigned NumOfThreads);
 
-void decrypt(std::string &PlainText,
-             const std::string &CipherText,
-             const std::string &aData,
-             const unsigned char *nonce,
-             const unsigned char *k);
+void decryptCuda(std::string &PlainText,
+                const std::string &CipherText,
+                const std::string &aData,
+                const unsigned char *nonce,
+                const unsigned char *k,
+                unsigned BlockSize,
+                unsigned NumOfThreads);
 
 template <int BlockSize, int NumOfThreads>
 class ElephantCudadEncryptor {
@@ -46,12 +50,12 @@ public:
 
   std::string encrypt(const std::string &PlainText) {
     auto CipherText = std::string{};
-    ::encrypt(CipherText, PlainText, aData, nonce, key);
+    ::encryptCuda(CipherText, PlainText, aData, nonce, key, BlockSize, NumOfThreads);
     return CipherText;
   }
   std::string decrypt(const std::string &CipherText) {
     auto PlainText = std::string{};
-    ::decrypt(PlainText, CipherText, aData, nonce, key);
+    ::decryptCuda(PlainText, CipherText, aData, nonce, key, BlockSize, NumOfThreads);
     return PlainText;
   }
 };
