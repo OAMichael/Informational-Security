@@ -214,7 +214,7 @@ void implementation_of_crypto(BYTE *c, BYTE *tag,
   for (LEN t = 0; t < num_of_blocks_it; ++t) {
     lfsr(mask_next, mask_tmp);
     
-    if (t % blockDim.x == threadIdx.x) {
+    if (t % gridDim.x == blockIdx.x) {
       if (t < num_of_blocks_message) {
         memcpy(elephant_buf, nonce, NONCE_NUM_BYTES);
         memset(elephant_buf + NONCE_NUM_BYTES, 0, BLOCK_SIZE - NONCE_NUM_BYTES);

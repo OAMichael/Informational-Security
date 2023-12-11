@@ -22,11 +22,14 @@ int main(int Argc, char **Argv) {
   auto RSA = std::make_unique<RSA::Cipher>();
   auto Elephant = std::make_unique<elephant::Cipher>();
   auto ElephantCuda = std::make_unique<elephantCuda::Cipher<1, 1>>();
-  auto ElephantCuda512 = std::make_unique<elephantCuda::Cipher<16, 16>>();
+  auto ElephantCuda1_16 = std::make_unique<elephantCuda::Cipher<1, 16>>();
+  auto ElephantCuda1_32 = std::make_unique<elephantCuda::Cipher<1, 32>>();
+  auto ElephantCuda16_512 = std::make_unique<elephantCuda::Cipher<16, 512>>();
+  auto ElephantCuda1_512 = std::make_unique<elephantCuda::Cipher<1, 512>>();
+  auto ElephantCuda1_2048 = std::make_unique<elephantCuda::Cipher<1, 2048>>();
   auto Ciphers = std::vector<Executor *>{Mock.get(), Feistel.get(), 
                                          Elephant.get(), RSA.get(),
-                                         ElephantCuda.get(),
-                                         ElephantCuda512.get()};
+                                         ElephantCuda.get()};
 
   auto Cfg = BenchConfig{};
   Cfg.TextSize = 512;
@@ -34,10 +37,15 @@ int main(int Argc, char **Argv) {
   std::cout << "Text size: " << Cfg.TextSize << std::endl;
   Benchmark::printResults(Res, std::cout);
 
-  Cfg.TextSize = 512000;
+  Cfg.TextSize = 5120000;
   Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar10.get(), 
-                                    Elephant.get(), ElephantCuda.get(),
-                                    ElephantCuda512.get()};
+                                    Elephant.get(), 
+                                    ElephantCuda.get(),
+                                    ElephantCuda1_16.get(),
+                                    ElephantCuda1_32.get(),
+                                    ElephantCuda16_512.get(),
+                                    ElephantCuda1_512.get(),
+                                    ElephantCuda1_2048.get()};
   Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "\nParallel version on text: " << Cfg.TextSize << std::endl; 
   Benchmark::printResults(Res, std::cout);
