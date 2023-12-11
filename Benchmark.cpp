@@ -22,21 +22,22 @@ int main(int Argc, char **Argv) {
   auto RSA = std::make_unique<RSA::Cipher>();
   auto Elephant = std::make_unique<elephant::Cipher>();
   auto ElephantCuda = std::make_unique<elephantCuda::Cipher<1, 1>>();
+  auto ElephantCuda512 = std::make_unique<elephantCuda::Cipher<16, 16>>();
   auto Ciphers = std::vector<Executor *>{Mock.get(), Feistel.get(), 
                                          Elephant.get(), RSA.get(),
-                                         ElephantCuda.get()};
+                                         ElephantCuda.get(),
+                                         ElephantCuda512.get()};
 
   auto Cfg = BenchConfig{};
-  Cfg.TextSize = 5120;
+  Cfg.TextSize = 512;
   auto Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "Text size: " << Cfg.TextSize << std::endl;
   Benchmark::printResults(Res, std::cout);
 
-return 0;
-
-  Cfg.TextSize = 51200000;
-  Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar4.get(), 
-                                    FeistelPar10.get(), Elephant.get()};
+  Cfg.TextSize = 512000;
+  Ciphers = std::vector<Executor *>{Feistel.get(), FeistelPar10.get(), 
+                                    Elephant.get(), ElephantCuda.get(),
+                                    ElephantCuda512.get()};
   Res = Benchmark{Ciphers.begin(), Ciphers.end(), Cfg}.run();
   std::cout << "\nParallel version on text: " << Cfg.TextSize << std::endl; 
   Benchmark::printResults(Res, std::cout);

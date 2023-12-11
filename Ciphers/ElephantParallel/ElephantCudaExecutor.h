@@ -19,7 +19,8 @@ public:
   } 
 
   std::string getName() const override {
-    return "Elephant cuda";
+    return "Elephant cuda {" + std::to_string(BlockSize) + 
+            ", " + std::to_string(NumOfThreads) + "}";
   }
 };
 

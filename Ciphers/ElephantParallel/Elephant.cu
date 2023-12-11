@@ -213,39 +213,40 @@ void implementation_of_crypto(BYTE *c, BYTE *tag,
 
   for (LEN t = 0; t < num_of_blocks_it; ++t) {
     lfsr(mask_next, mask_tmp);
+    
+    if (t % blockDim.x == threadIdx.x) {
+      if (t < num_of_blocks_message) {
+        memcpy(elephant_buf, nonce, NONCE_NUM_BYTES);
+        memset(elephant_buf + NONCE_NUM_BYTES, 0, BLOCK_SIZE - NONCE_NUM_BYTES);
+        xorOfBlock(elephant_buf, mask_tmp, BLOCK_SIZE);
+        xorOfBlock(elephant_buf, mask_next, BLOCK_SIZE);
+        permutation(elephant_buf);
+        xorOfBlock(elephant_buf, mask_tmp, BLOCK_SIZE);
+        xorOfBlock(elephant_buf, mask_next, BLOCK_SIZE);
+        const LEN r_len = (t == num_of_blocks_message - 1) ? len_message - offset : BLOCK_SIZE;
+        xorOfBlock(elephant_buf, m + offset, r_len);
+        memcpy(c + offset, elephant_buf, r_len);
+      }
 
-    if (t < num_of_blocks_message) {
-      memcpy(elephant_buf, nonce, NONCE_NUM_BYTES);
-      memset(elephant_buf + NONCE_NUM_BYTES, 0, BLOCK_SIZE - NONCE_NUM_BYTES);
-      xorOfBlock(elephant_buf, mask_tmp, BLOCK_SIZE);
-      xorOfBlock(elephant_buf, mask_next, BLOCK_SIZE);
-      permutation(elephant_buf);
-      xorOfBlock(elephant_buf, mask_tmp, BLOCK_SIZE);
-      xorOfBlock(elephant_buf, mask_next, BLOCK_SIZE);
-      const LEN r_len = (t == num_of_blocks_message - 1) ? len_message - offset : BLOCK_SIZE;
-      xorOfBlock(elephant_buf, m + offset, r_len);
-      memcpy(c + offset, elephant_buf, r_len);
+      if (t > 0 && t <= num_of_blocks_cipher) {
+        get_ciphertext_block(tag_buf, encrypt ? c : m, len_message, t - 1);
+        xorOfBlock(tag_buf, mask_prev, BLOCK_SIZE);
+        xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
+        permutation(tag_buf);
+        xorOfBlock(tag_buf, mask_prev, BLOCK_SIZE);
+        xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
+        xorOfBlock(tag, tag_buf, TAG_SIZE);
+      }
+
+      // If there is any AD left, compute tag for AD block 
+      if (t + 1 < num_of_blocks_adata) {
+        get_associated_data_block(tag_buf, aData, len_aData, nonce, t + 1);
+        xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
+        permutation(tag_buf);
+        xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
+        xorOfBlock(tag, tag_buf, TAG_SIZE);
+      }
     }
-
-    if (t > 0 && t <= num_of_blocks_cipher) {
-      get_ciphertext_block(tag_buf, encrypt ? c : m, len_message, t - 1);
-      xorOfBlock(tag_buf, mask_prev, BLOCK_SIZE);
-      xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
-      permutation(tag_buf);
-      xorOfBlock(tag_buf, mask_prev, BLOCK_SIZE);
-      xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
-      xorOfBlock(tag, tag_buf, TAG_SIZE);
-    }
-
-    // If there is any AD left, compute tag for AD block 
-    if (t + 1 < num_of_blocks_adata) {
-      get_associated_data_block(tag_buf, aData, len_aData, nonce, t + 1);
-      xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
-      permutation(tag_buf);
-      xorOfBlock(tag_buf, mask_next, BLOCK_SIZE);
-      xorOfBlock(tag, tag_buf, TAG_SIZE);
-    }
-
     // Cyclically shift the mask buffers
     // Value of next_mask will be computed in the next iteration
     BYTE *const fix_mask = mask_prev;
