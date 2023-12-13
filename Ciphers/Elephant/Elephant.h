@@ -9,7 +9,6 @@
 #define KEY_NUMBER_OF_BYTES 16
 #define MAX_NUMBER_OF_KESSAK_ROUNDS 18
 #define INDEX(a, b) (((a) % 5) + 5 * ((b) % 5)) 
-// Macro for calculating the index of an element in a state array by coordinates (a, b)
 
 class ElephantEncryptor {
   unsigned long long lenMessage;
